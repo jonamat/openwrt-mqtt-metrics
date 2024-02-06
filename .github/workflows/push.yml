@@ -10,7 +10,7 @@ on:
 jobs:
   push:
     name: Push
-    runs-on: ubuntu-latest
+    runs-on: golang:1.21.1-bullseye
     permissions:
       contents: read
       packages: write
