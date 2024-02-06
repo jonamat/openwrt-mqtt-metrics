@@ -8,6 +8,8 @@ RUN apt update && apt install ca-certificates
 
 COPY . .
 
+RUN go mod vendor
+
 # Create statically linked server binary
 RUN CGO_ENABLED=0 && GOOS=${TARGETOS} && GOARCH=${TARGETARCH} && go build -x -mod vendor -tags netgo -ldflags '-w -extldflags "-static"' -o ./bin/modem-logger ./cmd/main.go
 # RUN CGO_ENABLED=0 && GOOS=${TARGETOS} && GOARCH=${TARGETARCH} && go build -x -tags netgo -ldflags '-w -extldflags "-static"' -o ./bin/modem-logger ./cmd/main.go
