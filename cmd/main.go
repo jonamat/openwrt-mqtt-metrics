@@ -109,8 +109,7 @@ func main() {
 		fmt.Println("Error loading .env file")
 	}
 
-	var MQTTBroker = os.Getenv("MQTT_BROKER")
-
+	var MQTT_BRORKER_URL = os.Getenv("MQTT_BRORKER_URL")
 	var OPENWRT_URL = os.Getenv("OPENWRT_URL")
 	var OPENWRT_USER = os.Getenv("OPENWRT_USER")
 	var OPENWRT_PASSWORD = os.Getenv("OPENWRT_PASSWORD")
@@ -118,7 +117,7 @@ func main() {
 	var PUBLISH_TOPIC = os.Getenv("PUBLISH_TOPIC")
 	var HEARTBEAT_TOPIC = os.Getenv("HEARTBEAT_TOPIC")
 
-	opts := mqtt.NewClientOptions().AddBroker(MQTTBroker)
+	opts := mqtt.NewClientOptions().AddBroker(MQTT_BRORKER_URL)
 	opts.AutoReconnect = true
 	opts.ConnectRetryInterval = 5 * time.Second
 	mqttClient := mqtt.NewClient(opts)
