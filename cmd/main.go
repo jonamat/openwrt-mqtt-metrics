@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -93,6 +94,11 @@ type OpenWRTModemStatus struct {
 	} `json:"data"`
 }
 
+type OpenWRTLoginRequestBody struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 var lastStatus = "ALIVE"
 
 func heatbeatRoutine(mqttClient mqtt.Client, topic string, lastStatus string) {
@@ -111,11 +117,13 @@ func main() {
 
 	var MQTT_BRORKER_URL = os.Getenv("MQTT_BRORKER_URL")
 	var OPENWRT_URL = os.Getenv("OPENWRT_URL")
-	var OPENWRT_USER = os.Getenv("OPENWRT_USER")
+	var OPENWRT_USER = os.Getenv("OPENWRT_USERNAME")
 	var OPENWRT_PASSWORD = os.Getenv("OPENWRT_PASSWORD")
 	var DELAY_SECONDS, _ = strconv.ParseInt(os.Getenv("DELAY_SECONDS"), 10, 64)
 	var PUBLISH_TOPIC = os.Getenv("PUBLISH_TOPIC")
 	var HEARTBEAT_TOPIC = os.Getenv("HEARTBEAT_TOPIC")
+
+	println("Starting...")
 
 	opts := mqtt.NewClientOptions().AddBroker(MQTT_BRORKER_URL)
 	opts.AutoReconnect = true
@@ -125,7 +133,7 @@ func main() {
 	for {
 		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 			lastStatus = "ERROR"
-			println(token.Error())
+			println("Error during mqtt connection", token.Error())
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -136,22 +144,39 @@ func main() {
 	go heatbeatRoutine(mqttClient, HEARTBEAT_TOPIC, lastStatus)
 
 	for {
+		println("Starting loop")
 		time.Sleep(time.Duration(DELAY_SECONDS) * time.Second)
 
-		loginReq, err := http.NewRequest("POST", OPENWRT_URL+"/api/login", nil)
+		loginReqBody := OpenWRTLoginRequestBody{
+			Username: OPENWRT_USER,
+			Password: OPENWRT_PASSWORD,
+		}
+		loginReqBodyBytes, err := json.Marshal(loginReqBody)
 		if err != nil {
-			println(err)
+			println("Error during login request body marshalling", err.Error())
+			lastStatus = "ERROR"
+			continue
+		}
+
+		loginReq, err := http.NewRequest("POST", OPENWRT_URL+"/api/login", bytes.NewBuffer(loginReqBodyBytes))
+		if err != nil {
+			println("Error during login request creation", err.Error())
 			lastStatus = "ERROR"
 			continue
 		}
 
 		loginReq.Header.Set("Content-Type", "application/json")
-		loginReq.SetBasicAuth(OPENWRT_USER, OPENWRT_PASSWORD)
+		loginReq.Header.Set("Accept", "application/json")
 
 		client := &http.Client{}
 		loginRes, err := client.Do(loginReq)
 		if err != nil {
-			println(err)
+			println("Error during login request", err.Error())
+			lastStatus = "ERROR"
+			continue
+		}
+		if loginRes.StatusCode != 200 {
+			println("Status code returned from login request", loginRes.Status)
 			lastStatus = "ERROR"
 			continue
 		}
@@ -161,7 +186,7 @@ func main() {
 
 		statusReq, err := http.NewRequest("GET", OPENWRT_URL+"/api/mobile/modems/status_full/", nil)
 		if err != nil {
-			println(err)
+			println("Error during stauts request creation", err.Error())
 			lastStatus = "ERROR"
 			continue
 		}
@@ -170,13 +195,23 @@ func main() {
 
 		statusRes, err := client.Do(statusReq)
 		if err != nil {
-			println(err)
+			println("Error during status request", err.Error())
+			lastStatus = "ERROR"
+			continue
+		}
+		if statusRes.StatusCode != 200 {
+			println("Status code returned from status request", statusRes.Status)
 			lastStatus = "ERROR"
 			continue
 		}
 
 		var modemStatus OpenWRTModemStatus
 		json.NewDecoder(statusRes.Body).Decode(&modemStatus)
+		if modemStatus.Success == false {
+			println("Status request failed on router", err.Error())
+			lastStatus = "ERROR"
+			continue
+		}
 
 		mqttClient.Publish(PUBLISH_TOPIC+"/mobile_signal", 0, false, fmt.Sprintf("%d", modemStatus.Data[0].Signal))
 		mqttClient.Publish(PUBLISH_TOPIC+"/mobile_rsrp", 0, false, fmt.Sprintf("%d", modemStatus.Data[0].Rsrp))
