@@ -18,4 +18,4 @@ COPY --from=builder /build/bin/modem-logger /bin/modem-logger
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
-CMD ["modem-logger", "start", "-s"]
+CMD ["modem-logger"]
